@@ -217,14 +217,14 @@ async function generatePdf(contents, fileName) {
     content: [],
     defaultStyle: { font: 'NotoSansJP' },
     styles: {
-      header: { fontSize: 20, bold: true, margin: [0, 0, 0, 10] },
-      question: { fontSize: 14, margin: [0, 5, 0, 5] },
-      choices: { fontSize: 12, margin: [15, 2, 0, 2] },
-      explanationHeader: { fontSize: 16, bold: true, margin: [0, 15, 0, 5] },
-      analysis: { fontSize: 12, margin: [15, 0, 0, 5] },
-      correctAnswer: { fontSize: 12, bold: true, margin: [0, 5, 0, 5] },
-      points: { fontSize: 12, margin: [15, 0, 0, 15] },
-      error: { fontSize: 12, color: 'red', margin: [0, 5, 0, 5] }
+      header: { fontSize: 10, bold: true, margin: [0, 0, 0, 10] },
+      question: { fontSize: 16, margin: [0, 5, 0, 5] },
+      choices: { fontSize: 14, margin: [15, 2, 0, 2] },
+      explanationHeader: { fontSize: 14, bold: true, margin: [0, 15, 0, 5] },
+      analysis: { fontSize: 10, margin: [15, 0, 0, 5] },
+      correctAnswer: { fontSize: 10, bold: true, margin: [0, 5, 0, 5] },
+      points: { fontSize: 10, margin: [15, 0, 0, 15] },
+      error: { fontSize: 10, color: 'red', margin: [0, 5, 0, 5] }
     }
   };
 
@@ -279,7 +279,7 @@ async function generatePdf(contents, fileName) {
               const expImgBase64 = expImgBuffer.toString('base64');
               documentDefinition.content.push({
                 image: `data:image/jpeg;base64,${expImgBase64}`,
-                width: 200,
+                width: 150,
                 margin: [0, 5, 0, 5]
               });
             } else {
@@ -293,11 +293,12 @@ async function generatePdf(contents, fileName) {
       }
       // 選択肢考察
       documentDefinition.content.push({ text: "選択肢考察", style: 'explanationHeader' });
+      
       documentDefinition.content.push({ text: content.explanation.analysisText, style: 'analysis' });
       // 正解
-      if (content.explanation.pointsText && content.explanation.pointsText.trim() !== '') {
+      if (content.explanation.correctAnswer  && content.explanation.correctAnswer .trim() !== '') {
         documentDefinition.content.push({ text: "正解", style: 'explanationHeader' });
-        documentDefinition.content.push({ text: content.explanation.pointsText, style: 'pcorrectAnswer' });
+        documentDefinition.content.push({ text: content.explanation.correctAnswer, style: 'pcorrectAnswer' });
       }
       // ポイント（存在する場合のみ追加）
       if (content.explanation.pointsText && content.explanation.pointsText.trim() !== '') {
@@ -330,12 +331,12 @@ async function generatePdf(contents, fileName) {
  */
 async function main() {
     // ■ 設定値（必要に応じて書き換えてください）
-    const loginUrl = '';   // ログインページのURL
+    const loginUrl = 'https://m3e-medical.com/users/sign_in';   // ログインページのURL
     const email = '';             // ログイン用メールアドレス
     const password = '';                   // ログイン用パスワード
-    const fileName = "";//科目名（保存したいファイル名）
-    const startUrl = '';  // 最初の問題ページURL（適宜更新）
-    const numberOfPages = ;  // 連続してスクレイピングする問題数
+    const fileName = "細胞生物学";//科目名（保存したいファイル名）
+    const startUrl = 'https://m3e-medical.com/users/cbt/practice_questions/223874351#25395';  // 最初の問題ページURL（適宜更新）
+    const numberOfPages = 26;  // 連続してスクレイピングする問題数
   
     // ■ ログイン処理
     const jarredFetch = await login(loginUrl, email, password);
