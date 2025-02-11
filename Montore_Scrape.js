@@ -212,7 +212,7 @@ async function scrapeProblemContent(problemUrl, jarredFetch) {
  * PDF生成処理  
  * 各問題の【問題部分】と【解説部分】を、それぞれ新規ページとして配置します。
  */
-async function generatePdf(contents) {
+async function generatePdf(contents, fileName) {
   const documentDefinition = {
     content: [],
     defaultStyle: { font: 'NotoSansJP' },
@@ -310,10 +310,11 @@ async function generatePdf(contents) {
   }
 
   try {
+    const extension = "pdf";
     const pdfDoc = pdfMake.createPdf(documentDefinition);
     pdfDoc.getBuffer((buffer) => {
-      fs.writeFileSync('問題集.pdf', buffer);
-      console.log("PDFファイル '問題集.pdf' が生成されました。");
+      fs.writeFileSync(`${fileName}.${extension}`, buffer);
+      console.log("PDFファイルが生成されました。");
     });
   } catch (error) {
     console.error("PDF生成エラー:", error);
@@ -329,10 +330,11 @@ async function generatePdf(contents) {
  */
 async function main() {
     // ■ 設定値（必要に応じて書き換えてください）
-    const loginUrl = 'https://m3e-medical.com/users/sign_in';   // ログインページのURL
-    const email = '    ';             // ログイン用メールアドレス
-    const password = '  ';                   // ログイン用パスワード
-    const startUrl = '   ';  // 最初の問題ページURL（適宜更新）
+    const loginUrl = '';   // ログインページのURL
+    const email = '';             // ログイン用メールアドレス
+    const password = '';                   // ログイン用パスワード
+    const fileName = "";//科目名（保存したいファイル名）
+    const startUrl = '';  // 最初の問題ページURL（適宜更新）
     const numberOfPages = ;  // 連続してスクレイピングする問題数
   
     // ■ ログイン処理
@@ -363,7 +365,7 @@ async function main() {
     }
   
     // ■ PDF生成処理
-    await generatePdf(contents) 
+    await generatePdf(contents, fileName); 
 
 }
   // 実行
