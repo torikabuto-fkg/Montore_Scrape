@@ -208,13 +208,11 @@ async function scrapeProblemContent(problemUrl, jarredFetch) {
   }
   
 
-/**
- * ※ ヘルパー関数
- * 画像URL（または既にdata URLの場合）を受け取り、fetchを利用して画像データを取得し、
- * BufferからBase64文字列に変換して data URL を返します。
- */
+// ===============================
+// 【ヘルパー関数】
+// 1. fetchImageDataUrl(src)
+// 　URL（またはすでにdata URLの場合）から画像データを取得し、Base64のdata URLとして返す
 async function fetchImageDataUrl(src) {
-  // すでに data URL ならそのまま返す
   if (src.startsWith('data:')) {
     return src;
   }
@@ -233,14 +231,51 @@ async function fetchImageDataUrl(src) {
   }
 }
 
-/**
- * PDF生成処理
- * 各問題の【問題部分】と【解説部分】をそれぞれ新規ページに配置します。
- *
- * 画像が複数枚ある場合は、画像を最大３枚／行として自動レイアウトします。
- * たとえば、利用可能横幅（A4の左右マージン除く＝約515.28pt）内に
- * １行に n 枚並ぶ場合、各セルの幅は (515.28 ÷ n) となります。
- */
+// 2. buildImageTable(imageSrcArray, defaultFixedWidth)
+//    複数枚の画像がある場合、最大3枚／行のグリッドテーブルを作成する。
+//    ・画像が1枚の場合は、単体用にdefaultFixedWidth（例：200 or 150）を使用。
+//    ・複数枚の場合は、各行は必ず3セルとなるようにし、足りない場合は空セルでパディング。
+//    ・各セルの幅は、A4用紙の左右マージン除く利用可能横幅（availableWidth）を3で割った値となります。
+async function buildImageTable(imageSrcArray, defaultFixedWidth) {
+  // 利用可能横幅（例：A4用紙の左右マージン40ptずつ除く＝約515.28pt）
+  const availableWidth = 515.28;
+  const maxCols = 3; // 固定：1行に3セル
+
+  if (!imageSrcArray || imageSrcArray.length === 0) return null;
+  if (imageSrcArray.length === 1) {
+    // 1枚の場合は単体表示
+    const dataUrl = await fetchImageDataUrl(imageSrcArray[0]);
+    if (!dataUrl) return null;
+    return [[{ image: dataUrl, width: defaultFixedWidth, margin: [0, 5, 0, 5] }]];
+  } else {
+    const rows = [];
+    for (let i = 0; i < imageSrcArray.length; i += maxCols) {
+      const rowSrcs = imageSrcArray.slice(i, i + maxCols);
+      const row = [];
+      // 各セルの幅を固定：利用可能横幅を3で割った値
+      const cellWidth = availableWidth / maxCols;
+      for (const src of rowSrcs) {
+        const dataUrl = await fetchImageDataUrl(src);
+        if (dataUrl) {
+          row.push({ image: dataUrl, width: cellWidth, margin: [0, 5, 0, 5] });
+        } else {
+          row.push({ text: "画像読み込みエラー", style: 'error' });
+        }
+      }
+      // 行のセル数がmaxColsに満たない場合は空セルでパディング
+      while (row.length < maxCols) {
+        row.push({ text: "" });
+      }
+      rows.push(row);
+    }
+    return rows;
+  }
+}
+
+// ===============================
+// 【generatePdf関数】
+// Montore_Scrape.js のスクレイピング結果（contents）を受け取り、
+// 各問題ページ（【問題部分】と【解説部分】）を新規ページとしてPDFに配置します。
 async function generatePdf(contents, fileName) {
   const documentDefinition = {
     content: [],
@@ -257,64 +292,14 @@ async function generatePdf(contents, fileName) {
     }
   };
 
-  // A4用紙の左右マージン（例：40ptずつ）を除いた利用可能横幅（約595.28 - 80 = 515.28pt）
-  const availableWidth = 515.28;
-  // ※ 最大３枚／行にするので、もし行に３枚並んだ場合は各セルの幅は availableWidth/3
-
-  // 画像を最大３枚／行に分割してテーブル用の body を返すヘルパー
-  async function buildImageTable(imageSrcArray, defaultFixedWidth) {
-    // imageSrcArray: 画像URLの配列（data URL でもOK）
-    // defaultFixedWidth: 1枚の場合の固定幅（例：問題画像は200, 解説画像は150）
-    if (imageSrcArray.length === 0) return null;
-    if (imageSrcArray.length === 1) {
-      // 単体の場合は固定幅でそのまま返す（配列で1行のみのテーブル）
-      const dataUrl = await fetchImageDataUrl(imageSrcArray[0]);
-      if (!dataUrl) return null;
-      return [{
-        image: dataUrl,
-        width: defaultFixedWidth,
-        margin: [0, 5, 0, 5]
-      }];
-    } else {
-      // 複数枚の場合は、最大3枚／行に分割する
-      const rows = [];
-      for (let i = 0; i < imageSrcArray.length; i += 3) {
-        const rowImages = imageSrcArray.slice(i, i + 3);
-        const cellCount = rowImages.length; // 1～3枚
-        // 各セル幅は、利用可能幅をその行の画像数で割る
-        const cellWidth = availableWidth / cellCount;
-        const row = [];
-        for (const src of rowImages) {
-          const dataUrl = await fetchImageDataUrl(src);
-          if (dataUrl) {
-            row.push({ image: dataUrl, width: cellWidth, margin: [0, 5, 0, 5] });
-          } else {
-            row.push({ text: "画像読み込みエラー", style: 'error' });
-          }
-        }
-        rows.push(row);
-      }
-      // テーブルのセル数は各行ごとに異なってもよいですが、
-      // pdfMakeでは各行のセル数を一致させる必要があるため、行ごとに空セルでパディングします。
-      const maxCells = Math.max(...rows.map(r => r.length));
-      for (const row of rows) {
-        while (row.length < maxCells) {
-          row.push({ text: "" });
-        }
-      }
-      return rows;
-    }
-  }
-
-  // 【各問題コンテンツの処理】
   for (const content of contents) {
-    // 【問題ページ】
+    // ---【問題ページ】---
     documentDefinition.content.push(
       { text: `問題番号: ${content.problemNumber}`, style: 'header' },
       { text: content.questionText, style: 'question' }
     );
 
-    // 問題画像が存在する場合
+    // 問題画像：もし存在すれば、buildImageTable() を使ってレイアウト
     if (content.problemImageSrcs && content.problemImageSrcs.length > 0) {
       const tableBody = await buildImageTable(content.problemImageSrcs, 200);
       if (tableBody) {
@@ -341,11 +326,10 @@ async function generatePdf(contents, fileName) {
     // ページ改行（問題ページ終了）
     documentDefinition.content.push({ text: '', pageBreak: 'after' });
 
-    // 【解説ページ】
+    // ---【解説ページ】---
     if (content.explanation) {
       documentDefinition.content.push({ text: "解説", style: 'explanationHeader' });
-      
-      // 解説画像が存在する場合
+      // 解説画像：buildImageTable() を利用（解説画像は単体の場合は150pt固定）
       if (content.explanation.explanationImageSrcs && content.explanation.explanationImageSrcs.length > 0) {
         const tableBody = await buildImageTable(content.explanation.explanationImageSrcs, 150);
         if (tableBody) {
@@ -361,7 +345,6 @@ async function generatePdf(contents, fileName) {
           documentDefinition.content.push({ text: "解説画像読み込みエラー", style: 'error' });
         }
       }
-      
       // 解説テキスト群
       documentDefinition.content.push({ text: "選択肢考察", style: 'explanationHeader' });
       documentDefinition.content.push({ text: content.explanation.analysisText, style: 'analysis' });
@@ -402,9 +385,9 @@ async function main() {
     const loginUrl = 'https://m3e-medical.com/users/sign_in';   // ログインページのURL
     const email = '';             // ログイン用メールアドレス
     const password = '';                   // ログイン用パスワード
-    const fileName = "発生学";//科目名（保存したいファイル名）
-    const startUrl = 'https://m3e-medical.com/users/cbt/practice_questions/223874648#23837';  // 最初の問題ページURL（適宜更新）
-    const numberOfPages = 64;  // 連続してスクレイピングする問題数
+    const fileName = "細胞生物学";//科目名（保存したいファイル名）
+    const startUrl = 'https://m3e-medical.com/users/cbt/practice_questions/223927669#25395';  // 最初の問題ページURL（適宜更新）
+    const numberOfPages = 26;  // 連続してスクレイピングする問題数
   
     // ■ ログイン処理
     const jarredFetch = await login(loginUrl, email, password);
